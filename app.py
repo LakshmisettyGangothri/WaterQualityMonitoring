@@ -124,7 +124,7 @@ def show_login_page():
 
 if __name__ == "__main__":
     main()
-# Hide the sidebar and sidebar dragger
+
 st.markdown("""
     <style>
     [data-testid="stSidebar"] {
