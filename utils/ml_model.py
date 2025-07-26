@@ -1,116 +1,55 @@
 import pandas as pd
+import joblib
 import os
-from datetime import datetime
 
-def initialize_data_files():
-    """Initialize data files if they don't exist"""
-    # Create data directory
-    os.makedirs('data', exist_ok=True)
-    os.makedirs('models', exist_ok=True)
-    
-    # Initialize users.csv
-    if not os.path.exists('data/users.csv'):
-        users_df = pd.DataFrame({
-            'user_id': pd.Series(dtype='str'),
-            'username': pd.Series(dtype='str'),
-            'email': pd.Series(dtype='str'),
-            'password_hash': pd.Series(dtype='str'),
-            'registration_date': pd.Series(dtype='str')
-        })
-        users_df.to_csv('data/users.csv', index=False)
-    
-    # Initialize predictions.csv
-    if not os.path.exists('data/predictions.csv'):
-        predictions_df = pd.DataFrame({
-            'prediction_id': pd.Series(dtype='str'),
-            'user_id': pd.Series(dtype='str'),
-            'region': pd.Series(dtype='str'),
-            'state': pd.Series(dtype='str'),
-            'timestamp': pd.Series(dtype='str'),
-            'potability': pd.Series(dtype='int'),
-            'confidence': pd.Series(dtype='float'),
-            'pH': pd.Series(dtype='float'),
-            'Solids': pd.Series(dtype='float'),
-            'Sulfate': pd.Series(dtype='float'),
-            'Organic_carbon': pd.Series(dtype='float'),
-            'Turbidity': pd.Series(dtype='float'),
-            'Hardness': pd.Series(dtype='float'),
-            'Chloramines': pd.Series(dtype='float'),
-            'Conductivity': pd.Series(dtype='float'),
-            'Trihalomethanes': pd.Series(dtype='float')
-        })
-        predictions_df.to_csv('data/predictions.csv', index=False)
+# Load the trained model
+def load_model():
+    return joblib.load("models/model.pkl")
 
-def save_prediction(prediction_data):
-    """Save a new prediction to the database"""
-    try:
-        # Load existing predictions
-        predictions_df = pd.read_csv('data/predictions.csv')
-        
-        # Add prediction ID
-        prediction_data['prediction_id'] = f"pred_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{len(predictions_df)}"
-        
-        # Create new prediction dataframe
-        new_prediction_df = pd.DataFrame([prediction_data])
-        
-        # Concatenate and save
-        if not predictions_df.empty:
-            predictions_df = pd.concat([predictions_df, new_prediction_df], ignore_index=True)
-        else:
-            predictions_df = new_prediction_df
-        predictions_df.to_csv('data/predictions.csv', index=False)
-        
-        return True
-    except Exception as e:
-        print(f"Error saving prediction: {e}")
-        return False
+# Make a prediction and return confidence
+def make_prediction(model, input_data):
+    df = pd.DataFrame([input_data])
+    prediction = model.predict(df)[0]
+    confidence = max(model.predict_proba(df)[0]) * 100
+    return prediction, confidence
 
-def get_user_predictions(user_id):
-    """Get all predictions for a specific user"""
-    try:
-        predictions_df = pd.read_csv('data/predictions.csv')
-        user_predictions = predictions_df[predictions_df['user_id'] == user_id]
-        if not user_predictions.empty:
-            return user_predictions.sort_values('timestamp', ascending=False)
-        else:
-            return user_predictions
-    except FileNotFoundError:
-        return pd.DataFrame()
-    except Exception as e:
-        print(f"Error loading user predictions: {e}")
-        return pd.DataFrame()
+# Analyze parameters for safety
+def get_parameter_analysis(sample_data):
+    safe_ranges = {
+        'pH': (6.5, 8.5),
+        'Solids': (0, 10000),
+        'Sulfate': (0, 400),
+        'Organic_carbon': (0, 20),
+        'Turbidity': (0, 5),
+        'Hardness': (0, 300),
+        'Chloramines': (0, 2.5),
+        'Conductivity': (0, 800),
+        'Trihalomethanes': (0, 100)
+    }
 
-def get_all_users():
-    """Get all users data"""
-    try:
-        users_df = pd.read_csv('data/users.csv')
-        return users_df
-    except FileNotFoundError:
-        return pd.DataFrame()
-    except Exception as e:
-        print(f"Error loading users data: {e}")
-        return pd.DataFrame()
+    analysis = []
+    for param, value in sample_data.items():
+        if param in safe_ranges:
+            min_val, max_val = safe_ranges[param]
+            status = "Safe ✅" if min_val <= value <= max_val else "Unsafe ⚠️"
+            analysis.append({
+                'Parameter': param,
+                'Value': value,
+                'Safe Range': f"{min_val}-{max_val}",
+                'Status': status
+            })
 
-def get_all_predictions():
-    """Get all predictions data"""
-    try:
-        predictions_df = pd.read_csv('data/predictions.csv')
-        return predictions_df
-    except FileNotFoundError:
-        return pd.DataFrame()
-    except Exception as e:
-        print(f"Error loading predictions data: {e}")
-        return pd.DataFrame()
+    return pd.DataFrame(analysis)
 
-def export_data_csv(dataframe):
-    """Export dataframe to CSV format for download"""
-    return dataframe.to_csv(index=False)
-
-def get_user_by_id(user_id):
-    """Get user information by user ID"""
-    try:
-        users_df = pd.read_csv('data/users.csv')
-        user_data = users_df[users_df['user_id'] == user_id]
-        return user_data.iloc[0].to_dict() if not user_data.empty else None
-    except:
-        return None
+# Generate suggestions if parameters are unsafe
+def generate_precautions(sample_data):
+    suggestions = []
+    if sample_data['pH'] < 6.5 or sample_data['pH'] > 8.5:
+        suggestions.append("Maintain pH between 6.5 and 8.5.")
+    if sample_data['Turbidity'] > 5:
+        suggestions.append("Reduce turbidity using filtration methods.")
+    if sample_data['Chloramines'] > 2.5:
+        suggestions.append("Check for excess chlorination.")
+    if sample_data['Sulfate'] > 400:
+        suggestions.append("High sulfate levels can cause taste issues.")
+    return suggestions

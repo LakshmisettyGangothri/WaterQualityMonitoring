@@ -125,12 +125,27 @@ def show_prediction_results(sample_data, prediction, confidence, region, state):
         else:
             return 'background-color: lightcoral'
     
-    styled_df = analysis_df.style.map(highlight_status, subset=['Status'])
-    st.dataframe(styled_df, use_container_width=True)
     
     # Precautionary suggestions
     st.subheader("🛡️ Precautionary Suggestions")
     suggestions = generate_precautions(sample_data)
+    # Force fixed column order to avoid layout jumps
+    analysis_df = analysis_df[['Parameter', 'Value', 'Safe Range', 'Status']]
+
+# Color code with stable table rendering
+    styled_df = (
+        analysis_df
+        .style
+        .applymap(lambda v: 'background-color: lightgreen' if "Safe" in str(v) else 'background-color: lightcoral', subset=['Status'])
+        .set_table_styles([
+            {'selector': 'th', 'props': [('text-align', 'center')]},
+            {'selector': 'td', 'props': [('text-align', 'center')]}
+        ])
+        .set_properties(**{'width': '150px'})
+    )
+
+    st.dataframe(styled_df, use_container_width=True, height=350)
+
     
     if suggestions:
         for i, suggestion in enumerate(suggestions, 1):
